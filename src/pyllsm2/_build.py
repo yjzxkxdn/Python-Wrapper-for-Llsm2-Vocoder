@@ -271,7 +271,21 @@ void llsm_py_free(void* p);
 
 ffibuilder.cdef(CDEF)
 
-_libllsm2 = Path("..") / "libllsm2"
+_libllsm2_candidates = [
+    Path("vendor") / "libllsm2",
+    Path("libllsm2"),
+    Path("..") / "libllsm2",
+]
+_libllsm2 = None
+for _candidate in _libllsm2_candidates:
+    if _candidate.exists():
+        _libllsm2 = _candidate
+        break
+if _libllsm2 is None:
+    raise RuntimeError(
+        "Cannot find libllsm2 source tree. Expected one of: "
+        "vendor/libllsm2, libllsm2, ../libllsm2"
+    )
 
 SOURCES = [
     _libllsm2 / "container.c",

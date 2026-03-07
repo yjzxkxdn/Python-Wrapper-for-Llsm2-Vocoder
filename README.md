@@ -63,3 +63,23 @@ Run optional `librosa.pyin` smoke test:
 ```bash
 PYLLSM2_TEST_LIBROSA=1 pytest pyllsm2/tests/test_layer0_pipeline_from_libllsm2.py -q
 ```
+
+## PyPI Auto Publish (GitHub Actions)
+
+Workflow file:
+
+- `.github/workflows/publish-pypi.yml`
+
+Behavior:
+
+- triggers on GitHub Release `published` (and manual `workflow_dispatch`)
+- builds `sdist` + `wheel`
+- publishes to PyPI via trusted publishing (`id-token`)
+
+You need to configure PyPI Trusted Publisher for this GitHub repository/project.
+
+Build note: package build requires `libllsm2` source tree at one of:
+
+- `vendor/libllsm2`
+- `libllsm2`
+- `../libllsm2`
