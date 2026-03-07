@@ -73,7 +73,7 @@ Workflow file:
 Behavior:
 
 - triggers on GitHub Release `published` (and manual `workflow_dispatch`)
-- builds `sdist` + `wheel`
+- builds `sdist`
 - publishes to PyPI via trusted publishing (`id-token`)
 
 You need to configure PyPI Trusted Publisher for this GitHub repository/project.
@@ -83,3 +83,10 @@ Build note: package build requires `libllsm2` source tree at one of:
 - `vendor/libllsm2`
 - `libllsm2`
 - `../libllsm2`
+
+## License
+
+`pyllsm2` is licensed under **GPL-3.0-or-later**.
+
+- Main license text: `LICENSE`
+- Third-party notices: `THIRD_PARTY_NOTICES.md`

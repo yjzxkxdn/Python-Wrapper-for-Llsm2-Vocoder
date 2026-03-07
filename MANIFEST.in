@@ -1,7 +1,8 @@
 include README.md
+include LICENSE
+include THIRD_PARTY_NOTICES.md
 include setup.py
 include pyproject.toml
 recursive-include src *.py *.c *.h
 recursive-include vendor *.c *.h *.md LICENSE
 recursive-include tests *.py
-
