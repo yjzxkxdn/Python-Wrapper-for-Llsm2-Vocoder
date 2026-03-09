@@ -22,5 +22,8 @@ test = [
 [tool.setuptools]
 package-dir = { "" = "src" }
 
+[tool.setuptools.package-data]
+pyllsm2 = ["*.pyi", "py.typed"]
+
 [tool.setuptools.packages.find]
 where = ["src"]

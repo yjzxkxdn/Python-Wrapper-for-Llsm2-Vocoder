@@ -279,6 +279,8 @@ FP_TYPE* cig_filterbank_spectrum(filterbank* fbank, FP_TYPE* S, int nfft, int fs
 void llsm_py_container_attach(llsm_container* dst, int index, void* ptr,
   llsm_fdestructor dtor, llsm_fcopy copyctor);
 void llsm_py_free(void* p);
+int llsm_py_aoptions_resize_nchannel(llsm_aoptions* options, int nchannel);
+int llsm_py_aoptions_set_chanfreq(llsm_aoptions* options, FP_TYPE* src, int nfreq);
 int llsm_py_chunk_nfrm(llsm_chunk* chunk);
 int llsm_py_chunk_fill_nhar(llsm_chunk* chunk, int* dst, int nfrm);
 int llsm_py_chunk_set_f0(llsm_chunk* chunk, FP_TYPE* src, int nfrm);

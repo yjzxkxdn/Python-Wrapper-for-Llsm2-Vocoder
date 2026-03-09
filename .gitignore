@@ -12,6 +12,8 @@ dist/
 .pytest_cache/
 .vscode/
 Release/
-pyllsm2/
+/pyllsm2/
+!src/pyllsm2/*.pyi
+!src/pyllsm2/py.typed
 test_outputs/
 tests/audio_outputs/

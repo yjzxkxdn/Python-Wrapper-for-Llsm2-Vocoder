@@ -295,6 +295,12 @@ def _normalize_frame_mask(mask: Iterable[int] | Iterable[bool] | None, nfrm: int
     return out
 
 
+def _unexpected_kwargs(type_name: str, kwargs: dict[str, Any]) -> None:
+    if kwargs:
+        names = ", ".join(sorted(kwargs))
+        raise TypeError(f"{type_name} got unexpected keyword argument(s): {names}")
+
+
 def _chunk_matches_layer(ptr, layer: int) -> bool:
     if ptr == ffi.NULL:
         return False
@@ -444,6 +450,7 @@ def _copy_analysis_options(options: AnalysisOptions | Any | None = None) -> "Ana
     dst.maxnhar_e = int(src.maxnhar_e)
     dst.npsd = int(src.npsd)
     dst.nchannel = int(src.nchannel)
+    dst.chanfreq = np.array(src.chanfreq, dtype=FP_DTYPE, copy=True)
     dst.lip_radius = float(src.lip_radius)
     dst.f0_refine = int(src.f0_refine)
     dst.hm_method = int(src.hm_method)
@@ -772,15 +779,13 @@ class AnalysisOptions:
         "maxnhar",
         "maxnhar_e",
         "npsd",
-        "nchannel",
-        "chanfreq",
         "lip_radius",
         "f0_refine",
         "hm_method",
         "rel_winsize",
     }
 
-    def __init__(self, ptr=None, owns_memory: bool = True):
+    def __init__(self, ptr=None, owns_memory: bool = True, **kwargs: Any):
         if ptr is None:
             ptr = lib.llsm_create_aoptions()
         if ptr == ffi.NULL:
@@ -788,6 +793,7 @@ class AnalysisOptions:
         self.ptr = ptr
         self._owns_memory = owns_memory
         self._closed = False
+        self._apply_init_kwargs(kwargs)
 
     def __enter__(self) -> "AnalysisOptions":
         self._ensure_open()
@@ -817,6 +823,54 @@ class AnalysisOptions:
             lib.llsm_delete_aoptions(self.ptr)
         self._closed = True
 
+    def _apply_init_kwargs(self, kwargs: dict[str, Any]) -> None:
+        if not kwargs:
+            return
+        sentinel = object()
+        chanfreq = kwargs.pop("chanfreq", sentinel)
+        nchannel = kwargs.pop("nchannel", sentinel)
+        if chanfreq is not sentinel:
+            chanfreq_arr = as_f32_array(chanfreq, "chanfreq")
+            implied_nchannel = int(chanfreq_arr.size) + 1
+            if nchannel is not sentinel and int(nchannel) != implied_nchannel:
+                raise ValueError(
+                    f"nchannel={int(nchannel)} is inconsistent with chanfreq length {chanfreq_arr.size}"
+                )
+        else:
+            chanfreq_arr = None
+        _unexpected_kwargs(type(self).__name__, {k: v for k, v in kwargs.items() if k not in self._FIELDS})
+        for name, value in kwargs.items():
+            setattr(self, name, value)
+        if chanfreq_arr is not None:
+            self.chanfreq = chanfreq_arr
+        elif nchannel is not sentinel:
+            self.nchannel = int(nchannel)
+
+    @property
+    def nchannel(self) -> int:
+        self._ensure_open()
+        return int(self.ptr.nchannel)
+
+    @nchannel.setter
+    def nchannel(self, value: int) -> None:
+        self._ensure_open()
+        rc = int(lib.llsm_py_aoptions_resize_nchannel(self.ptr, int(value)))
+        if rc != 0:
+            raise RuntimeError(f"llsm_py_aoptions_resize_nchannel failed with code {rc}")
+
+    @property
+    def chanfreq(self) -> FloatArray1D:
+        self._ensure_open()
+        return _f32_view_1d(self.ptr.chanfreq, max(0, int(self.ptr.nchannel) - 1))
+
+    @chanfreq.setter
+    def chanfreq(self, value: Iterable[float]) -> None:
+        self._ensure_open()
+        arr = as_f32_array(value, "chanfreq")
+        rc = int(lib.llsm_py_aoptions_set_chanfreq(self.ptr, ffi.from_buffer("FP_TYPE[]", arr), arr.size))
+        if rc != 0:
+            raise RuntimeError(f"llsm_py_aoptions_set_chanfreq failed with code {rc}")
+
     def __getattr__(self, name: str):
         if name in self._FIELDS:
             self._ensure_open()
@@ -839,7 +893,12 @@ class SynthesisOptions:
 
     _FIELDS = {"fs", "use_iczt", "use_l1", "iczt_param_a", "iczt_param_b"}
 
-    def __init__(self, fs: float | None = None, ptr=None, owns_memory: bool = True):
+    def __init__(self, fs: float | None = None, ptr=None, owns_memory: bool = True, **kwargs: Any):
+        if "fs" in kwargs:
+            if fs is not None:
+                raise TypeError("fs specified both positionally and by keyword")
+            fs = float(kwargs.pop("fs"))
+        _unexpected_kwargs(type(self).__name__, {k: v for k, v in kwargs.items() if k not in self._FIELDS - {"fs"}})
         if ptr is None:
             if fs is None:
                 raise ValueError("fs must be provided when ptr is None")
@@ -849,6 +908,8 @@ class SynthesisOptions:
         self.ptr = ptr
         self._owns_memory = owns_memory
         self._closed = False
+        for name, value in kwargs.items():
+            setattr(self, name, value)
 
     def __enter__(self) -> "SynthesisOptions":
         self._ensure_open()
