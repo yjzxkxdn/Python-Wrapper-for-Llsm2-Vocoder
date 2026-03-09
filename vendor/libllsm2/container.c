@@ -21,6 +21,9 @@
 #include <string.h>
 #include <stdlib.h>
 
+/* pyllsm2 modification: chunk lifecycle now also owns optional Python-facing
+ * shared ndarray storage cached in `llsm_chunk`. */
+
 FP_TYPE* llsm_create_fp(FP_TYPE x) {
   FP_TYPE* ret = malloc(sizeof(FP_TYPE));
   *ret = x;
@@ -163,6 +166,16 @@ llsm_chunk* llsm_create_chunk(llsm_container* conf, int init_frames) {
   if(nchannel == NULL || npsd == NULL) return NULL;
 
   ret -> conf = llsm_copy_container(conf);
+  ret -> py_frame_f0 = NULL;
+  ret -> py_frame_rd = NULL;
+  ret -> py_frame_nhar = NULL;
+  ret -> py_hm_ampl = NULL;
+  ret -> py_hm_phse = NULL;
+  ret -> py_hm_max_nhar = 0;
+  ret -> py_vtmagn_block = NULL;
+  ret -> py_vtmagn_max_len = 0;
+  ret -> py_vsphse_block = NULL;
+  ret -> py_vsphse_max_len = 0;
   if(nfrm != NULL) {
     ret -> frames = calloc(*nfrm, sizeof(llsm_container*));
     if(init_frames)
@@ -179,6 +192,10 @@ llsm_chunk* llsm_copy_chunk(llsm_chunk* src) {
   if(nfrm != NULL)
     for(int i = 0; i < *nfrm; i ++)
       ret -> frames[i] = llsm_copy_container(src -> frames[i]);
+  if(llsm_py_chunk_prepare_copy(ret, src) != 0) {
+    llsm_delete_chunk(ret);
+    return NULL;
+  }
   return ret;
 }
 
@@ -190,6 +207,13 @@ void llsm_delete_chunk(llsm_chunk* dst) {
       llsm_delete_container(dst -> frames[i]);
   }
   llsm_delete_container(dst -> conf);
+  free(dst -> py_frame_f0);
+  free(dst -> py_frame_rd);
+  free(dst -> py_frame_nhar);
+  free(dst -> py_hm_ampl);
+  free(dst -> py_hm_phse);
+  free(dst -> py_vtmagn_block);
+  free(dst -> py_vsphse_block);
   free(dst -> frames);
   free(dst);
 }

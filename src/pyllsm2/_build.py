@@ -31,6 +31,7 @@ typedef struct {
   FP_TYPE* ampl;
   FP_TYPE* phse;
   int nhar;
+  int owns_vectors;
 } llsm_hmframe;
 
 typedef struct {
@@ -89,6 +90,16 @@ typedef struct {
 typedef struct {
   llsm_container* conf;
   llsm_container** frames;
+  FP_TYPE* py_frame_f0;
+  FP_TYPE* py_frame_rd;
+  int* py_frame_nhar;
+  FP_TYPE* py_hm_ampl;
+  FP_TYPE* py_hm_phse;
+  int py_hm_max_nhar;
+  void* py_vtmagn_block;
+  int py_vtmagn_max_len;
+  void* py_vsphse_block;
+  int py_vsphse_max_len;
 } llsm_chunk;
 
 typedef void llsm_coder;
@@ -168,6 +179,7 @@ void llsm_delete_soptions(llsm_soptions* dst);
 llsm_chunk* llsm_create_chunk(llsm_container* conf, int init_frames);
 llsm_chunk* llsm_copy_chunk(llsm_chunk* src);
 void llsm_delete_chunk(llsm_chunk* dst);
+int llsm_py_chunk_prepare_copy(llsm_chunk* dst, llsm_chunk* src);
 void llsm_chunk_tolayer1(llsm_chunk* dst, int nfft);
 void llsm_chunk_tolayer0(llsm_chunk* dst);
 void llsm_chunk_phasesync_rps(llsm_chunk* dst, int layer1_based);
@@ -267,6 +279,39 @@ FP_TYPE* cig_filterbank_spectrum(filterbank* fbank, FP_TYPE* S, int nfft, int fs
 void llsm_py_container_attach(llsm_container* dst, int index, void* ptr,
   llsm_fdestructor dtor, llsm_fcopy copyctor);
 void llsm_py_free(void* p);
+int llsm_py_chunk_nfrm(llsm_chunk* chunk);
+int llsm_py_chunk_fill_nhar(llsm_chunk* chunk, int* dst, int nfrm);
+int llsm_py_chunk_set_f0(llsm_chunk* chunk, FP_TYPE* src, int nfrm);
+int llsm_py_chunk_frame_set_hm(
+  llsm_chunk* chunk, int frame_idx, FP_TYPE* ampl, FP_TYPE* phse, int nhar);
+int llsm_py_chunk_set_harmonics_matrix(
+  llsm_chunk* chunk, FP_TYPE* src_ampl, FP_TYPE* src_phse, int* src_nhar,
+  int nfrm, int max_nhar);
+int llsm_py_chunk_clear_member_mask(
+  llsm_chunk* chunk, int member_idx, unsigned char* mask, int nmask);
+int llsm_py_chunk_enable_pbp_mask(
+  llsm_chunk* chunk, unsigned char* mask, int nmask, int clear_hm);
+int llsm_py_chunk_get_scalar(
+  llsm_chunk* chunk, int member_idx, double default_value, FP_TYPE* dst, int nfrm);
+int llsm_py_chunk_set_scalar(llsm_chunk* chunk, int member_idx, FP_TYPE* src, int nfrm);
+int llsm_py_chunk_fill_vector_lengths(llsm_chunk* chunk, int member_idx, int* dst, int nfrm);
+int llsm_py_chunk_set_vector_matrix(
+  llsm_chunk* chunk, int member_idx, FP_TYPE* src, int* src_len, int nfrm, int max_len);
+int llsm_py_chunk_refresh_f0_view(llsm_chunk* chunk);
+int llsm_py_chunk_refresh_rd_view(llsm_chunk* chunk);
+int llsm_py_chunk_refresh_harmonics_view(llsm_chunk* chunk, int max_nhar);
+int llsm_py_chunk_refresh_vector_view(llsm_chunk* chunk, int member_idx, int max_len);
+int llsm_py_chunk_pitch_shift_layer1(
+  llsm_chunk* chunk, double ratio, int compensate_vtmagn_db, int clear_harmonics);
+int llsm_py_harmonic_analysis_matrix(
+  FP_TYPE* x, int nx, double fs, FP_TYPE* f0, int nfrm, double thop,
+  double rel_winsize, int maxnhar, int method, double pad_value,
+  FP_TYPE* dst_ampl, FP_TYPE* dst_phse, int* dst_nhar, int dst_max_nhar);
+int llsm_py_coder_reconstruct_chunk(
+  llsm_coder* coder, llsm_chunk* src, llsm_chunk* dst0, llsm_chunk* dst1);
+int llsm_py_rtsynth_render_chunk_decomposed(
+  llsm_rtsynth_buffer* rt, llsm_chunk* chunk, FP_TYPE* dst_p, FP_TYPE* dst_ap,
+  int nx, int trim_latency, int* dst_ny);
 """
 
 ffibuilder.cdef(CDEF)
@@ -288,6 +333,7 @@ if _libllsm2 is None:
     )
 
 SOURCES = [
+    Path("src") / "pyllsm2" / "python_compat.c",
     _libllsm2 / "container.c",
     _libllsm2 / "frame.c",
     _libllsm2 / "dsputils.c",

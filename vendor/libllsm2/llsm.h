@@ -131,10 +131,15 @@ void llsm_container_remove(llsm_container* dst, int index);
 /** @defgroup group_hmframe llsm_hmframe
  *  @{ */
 /** @brief Harmonic model parameters (in one frame). */
+/* pyllsm2 modification: `owns_vectors` lets Python-backed matrix views rebind
+ * `ampl`/`phse` to shared contiguous storage without double-free on teardown. */
 typedef struct {
-  FP_TYPE* ampl;       /**< harmonic amplitude (linear) vector */
-  FP_TYPE* phse;       /**< harmonic phase (radian) vector */
-  int      nhar;       /**< number of harmonics */
+  FP_TYPE* ampl;       /**< harmonic amplitude vector, shape (nhar,).
+                            Axis 0 is harmonic index within one frame. */
+  FP_TYPE* phse;       /**< harmonic phase vector, shape (nhar,).
+                            Axis 0 is harmonic index within one frame. */
+  int      nhar;       /**< number of harmonics in this single-frame vector */
+  int      owns_vectors; /**< whether ampl/phse are heap-owned by this frame */
 } llsm_hmframe;
 
 /** @brief Create an empty harmonic model frame with nhar harmonics. */
@@ -307,9 +312,32 @@ void llsm_delete_soptions(llsm_soptions* dst);
 /** @defgroup group_chunk llsm_chunk
  *  @{ */
 /** @brief A LLSM parameter chunk consisting of an array of LLSM frames. */
+/* pyllsm2 modification: extra fields below cache Python-facing ndarray-backed
+ * views for frame scalars, harmonic matrices, and variable-length vectors. */
 typedef struct {
   llsm_container* conf;
   llsm_container** frames;
+  FP_TYPE* py_frame_f0;   /**< shared f0 view, shape (nfrm,).
+                               Axis 0 is frame index over time. */
+  FP_TYPE* py_frame_rd;   /**< shared rd view, shape (nfrm,).
+                               Axis 0 is frame index over time. */
+  int* py_frame_nhar;     /**< shared harmonic-count view, shape (nfrm,).
+                               Axis 0 is frame index over time. */
+  FP_TYPE* py_hm_ampl;    /**< shared harmonic amplitude matrix,
+                               shape (nfrm, py_hm_max_nhar).
+                               Axis 0 is frame index; axis 1 is harmonic index. */
+  FP_TYPE* py_hm_phse;    /**< shared harmonic phase matrix,
+                               shape (nfrm, py_hm_max_nhar).
+                               Axis 0 is frame index; axis 1 is harmonic index. */
+  int py_hm_max_nhar;     /**< width of shared harmonic matrices */
+  void* py_vtmagn_block;  /**< shared variable-length VT rows.
+                               Logical values view has shape (nfrm, py_vtmagn_max_len).
+                               Axis 0 is frame index; axis 1 is spectral-bin index. */
+  int py_vtmagn_max_len;  /**< width of logical VT magnitude matrix */
+  void* py_vsphse_block;  /**< shared variable-length source-phase rows.
+                               Logical values view has shape (nfrm, py_vsphse_max_len).
+                               Axis 0 is frame index; axis 1 is source-harmonic index. */
+  int py_vsphse_max_len;  /**< width of logical source-phase matrix */
 } llsm_chunk;
 
 /** @brief Create an empty parameter chunk from model configurations. */
@@ -318,6 +346,8 @@ llsm_chunk* llsm_create_chunk(llsm_container* conf, int init_frames);
 llsm_chunk* llsm_copy_chunk(llsm_chunk* src);
 /** @brief Delete and free a parameter chunk. */
 void llsm_delete_chunk(llsm_chunk* dst);
+
+int llsm_py_chunk_prepare_copy(llsm_chunk* dst, llsm_chunk* src);
 
 /** @brief Build the layer 1 representation from an existing layer 0
  *    representation. */

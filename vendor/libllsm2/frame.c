@@ -22,11 +22,15 @@
 #include "llsm.h"
 #include "dsputils.h"
 
+/* pyllsm2 modification: harmonic frames can either own their vectors or point
+ * into shared Python-backed matrices managed at chunk level. */
+
 llsm_hmframe* llsm_create_hmframe(int nhar) {
   llsm_hmframe* ret = malloc(sizeof(llsm_hmframe));
   ret -> ampl = calloc(nhar, sizeof(FP_TYPE));
   ret -> phse = calloc(nhar, sizeof(FP_TYPE));
   ret -> nhar = nhar;
+  ret -> owns_vectors = 1;
   return ret;
 }
 
@@ -38,7 +42,11 @@ llsm_hmframe* llsm_copy_hmframe(llsm_hmframe* src) {
 
 void llsm_copy_hmframe_inplace(llsm_hmframe* dst, llsm_hmframe* src) {
   int memsize = sizeof(FP_TYPE) * src -> nhar;
-  if(dst -> nhar < src -> nhar) {
+  if(! dst -> owns_vectors) {
+    dst -> ampl = malloc(memsize);
+    dst -> phse = malloc(memsize);
+    dst -> owns_vectors = 1;
+  } else if(dst -> nhar < src -> nhar) {
     dst -> ampl = realloc(dst -> ampl, memsize);
     dst -> phse = realloc(dst -> phse, memsize);
   }
@@ -49,8 +57,10 @@ void llsm_copy_hmframe_inplace(llsm_hmframe* dst, llsm_hmframe* src) {
 
 void llsm_delete_hmframe(llsm_hmframe* dst) {
   if(dst == NULL) return;
-  free(dst -> ampl);
-  free(dst -> phse);
+  if(dst -> owns_vectors) {
+    free(dst -> ampl);
+    free(dst -> phse);
+  }
   free(dst);
 }
 
